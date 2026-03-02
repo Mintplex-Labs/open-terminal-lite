@@ -3,7 +3,6 @@ name: Build Docker Image
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -77,6 +76,25 @@ jobs:
       packages: write
 
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from pyproject.toml
+        id: version
+        run: |
+          VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
+          echo "major_minor=$MAJOR_MINOR" >> "$GITHUB_OUTPUT"
+
+      - name: Check if version changed
+        id: check
+        run: |
+          if git diff HEAD~1 --name-only | grep -q '^pyproject.toml$'; then
+            echo "version_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "version_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
@@ -97,9 +115,8 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ steps.version.outputs.version }},enable=${{ steps.check.outputs.version_changed }}
+            type=raw,value=${{ steps.version.outputs.major_minor }},enable=${{ steps.check.outputs.version_changed }}
             type=sha
 
       - name: Create manifest list and push
