@@ -6,14 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.7.2] - 2026-03-02
 
+### Added
+
+- 🔒 **Terminal session limit** — new `OPEN_TERMINAL_MAX_SESSIONS` environment variable (default `16`) caps the number of concurrent interactive terminal sessions. Dead sessions are automatically pruned before the limit is checked. Returns `429` when the limit is reached.
+
 ### Fixed
 
 - 🐳 **PTY device exhaustion** — fixed `OSError: out of pty devices` by closing leaked file descriptors when subprocess creation fails after `pty.openpty()`. Both `PtyRunner` (command execution) and `create_terminal` (interactive sessions) now properly clean up on error paths.
 - 🛡️ **Graceful PTY error handling** — `create_terminal` now returns a clear `503` with a descriptive message when the system runs out of PTY devices, instead of an unhandled server error.
-
-### Added
-
-- 🔒 **Terminal session limit** — new `OPEN_TERMINAL_MAX_SESSIONS` environment variable (default `16`) caps the number of concurrent interactive terminal sessions. Dead sessions are automatically pruned before the limit is checked. Returns `429` when the limit is reached.
 
 ## [0.7.1] - 2026-03-02
 
