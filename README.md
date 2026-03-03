@@ -159,7 +159,7 @@ Open-Terminal-Lite includes a built-in MCP server for use with MCP-compatible ap
 ```json
 {
   "mcpServers": {
-    "open-terminal": {
+    "open-terminal-lite": {
       "command": "docker",
       "args": [
         "run", "--rm", "-i",
