@@ -3,6 +3,8 @@ name: Push Latest Tag
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
 
 env:
   IMAGE_NAME: ghcr.io/mintplex-labs/open-terminal-lite

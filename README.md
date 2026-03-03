@@ -3,6 +3,8 @@
 A lightweight, self-hosted terminal that gives AI agents a dedicated environment to run commands, manage files, and execute code — all through a simple API.
 
 > **This is a fork of [open-webui/open-terminal](https://github.com/open-webui/open-terminal)**, rebuilt from the ground up in Node.js for lightweight, multi-user deployments in [AnythingLLM](https://anythingllm.com) and other AI tools.
+> 
+> Where possible, we've kept the original Open Terminal API and functionalty the same so documentation and examples should work out of the box.
 
 ## Why Open-Terminal-Lite?
 
