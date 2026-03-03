@@ -1,9 +1,8 @@
-name: Build and Publish Docker Image
+name: Push Latest Tag
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+    branches: [main]
 
 env:
   IMAGE_NAME: ghcr.io/mintplex-labs/open-terminal-lite
@@ -40,8 +39,8 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=${{ matrix.platform }}
-          cache-to: type=gha,scope=${{ matrix.platform }},mode=max
+          cache-from: type=gha,scope=latest-${{ matrix.platform }}
+          cache-to: type=gha,scope=latest-${{ matrix.platform }},mode=max
 
       - name: Export digest
         run: |
@@ -64,16 +63,6 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Get version from package.json
-        id: version
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
-          echo "major_minor=$MAJOR_MINOR" >> "$GITHUB_OUTPUT"
-
       - uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
@@ -88,14 +77,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create manifest list and push
+      - name: Push latest
         working-directory: /tmp/digests
         run: |
-          docker buildx imagetools create \
-            -t ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
-            -t ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.major_minor }} \
-            -t ${{ env.IMAGE_NAME }}:latest \
+          docker buildx imagetools create -t ${{ env.IMAGE_NAME }}:latest \
             $(printf '${{ env.IMAGE_NAME }}@sha256:%s ' *)
 
       - name: Inspect image
-        run: docker buildx imagetools inspect ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+        run: docker buildx imagetools inspect ${{ env.IMAGE_NAME }}:latest
