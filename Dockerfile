@@ -1,59 +1,65 @@
-FROM python:3.12
+# Build stage - compile native modules
+FROM node:22-alpine AS builder
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apk add --no-cache build-base cmake make python3
+
+WORKDIR /app
+COPY package.json yarn.lock* ./
+RUN yarn install --production --frozen-lockfile 2>/dev/null || yarn install --production
+
+# Runtime stage - minimal image
+FROM node:22-alpine
+
+# Runtime packages only (no build tools)
+RUN apk add --no-cache \
     # Core utilities
-    coreutils findutils grep sed gawk diffutils patch \
-    less file tree bc man-db \
+    coreutils findutils grep sed gawk diffutils patch less file tree bash \
     # Networking
-    curl wget net-tools iputils-ping dnsutils netcat-openbsd socat telnet \
-    openssh-client rsync \
-    # Editors
-    vim nano \
+    curl wget net-tools iputils bind-tools netcat-openbsd socat openssh-client rsync \
     # Version control
     git \
-    # Build tools
-    build-essential cmake make \
-    # Scripting & languages
-    perl ruby-full lua5.4 \
-    # Data processing
-    jq xmlstarlet sqlite3 \
-    # Media & documents
-    ffmpeg pandoc imagemagick \
-    # Compression
-    zip unzip tar gzip bzip2 xz-utils zstd p7zip-full \
-    # System
-    procps htop lsof strace sysstat \
-    sudo tmux screen \
-    ca-certificates gnupg apt-transport-https \
-    && rm -rf /var/lib/apt/lists/*
+    # System utilities
+    procps htop lsof \
+    # Terminal
+    tmux screen sudo \
+    # Certificates
+    ca-certificates ca-certificates-bundle openssl \
+    # Basic compression
+    zip unzip tar gzip \
+    && update-ca-certificates
 
-# Node.js (LTS)
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/*
+# Add CA roots removed from Mozilla's bundle but still widely used.
+# Comodo AAA Certificate Services — used by SSL.com/Cloudflare chains and many others.
+# Fetched from crt.sh (ID 331986) and committed to the repo so the build has no
+# outbound HTTPS dependency for a cert that cannot yet be trusted inside the image.
+COPY certs/ /usr/local/share/ca-certificates/
+RUN update-ca-certificates
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir \
-    numpy pandas scipy scikit-learn \
-    matplotlib seaborn plotly \
-    jupyter ipython \
-    requests beautifulsoup4 lxml \
-    sqlalchemy psycopg2-binary \
-    pyyaml toml jsonlines \
-    tqdm rich
+# Copy compiled node_modules from builder
+COPY --from=builder /app/node_modules ./node_modules
+COPY package.json ./
 
-COPY . .
-RUN pip install --no-cache-dir .
+# Copy source code
+COPY src/ ./src/
+COPY config.example.json ./
+COPY entrypoint.sh ./
 
-RUN useradd -m -s /bin/bash user && echo 'user ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-USER user
-ENV SHELL=/bin/bash
-WORKDIR /home/user
+# Make entrypoint executable
+RUN chmod +x /app/entrypoint.sh
 
+# Create non-root user
+RUN adduser -D -s /bin/bash sandbox \
+    && echo 'sandbox ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
+    && mkdir -p /opt/tools \
+    && chown sandbox:sandbox /opt/tools
+
+USER sandbox
+WORKDIR /home/sandbox
+
+VOLUME ["/opt/tools"]
 EXPOSE 8000
 
-COPY entrypoint.sh /app/entrypoint.sh
-
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["run"]
+CMD ["run", "--host", "0.0.0.0"]

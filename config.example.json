@@ -1,0 +1,13 @@
+{
+  "host": "0.0.0.0",
+  "port": 8000,
+  "api_key": "",
+  "cors_allowed_origins": "*",
+  "log_dir": "",
+  "max_terminal_sessions": 16,
+  "enable_terminal": true,
+  "term": "xterm-256color",
+  "binary_mime_prefixes": "image",
+  "tools_dir": "/opt/tools",
+  "user_fs_dir": ""
+}

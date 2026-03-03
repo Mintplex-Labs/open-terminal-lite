@@ -1,0 +1,6 @@
+Hello from the test data folder!
+This is line 2 with some searchable content.
+Line 3 contains the word ERROR for grep testing.
+Line 4 is just regular text.
+Another ERROR appears on line 5.
+Final line 6 wraps things up.

@@ -1,14 +1,15 @@
-name: Build Docker Image
+name: Build and Publish Docker Image
 
 on:
   push:
     branches: [main]
+    tags:
+      - "v*.*.*"
   pull_request:
     branches: [main]
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: mintplex-labs/open-terminal-lite
 
 jobs:
   build:
@@ -33,14 +34,13 @@ jobs:
       - uses: docker/login-action@v3
         if: github.event_name != 'pull_request'
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.IMAGE_NAME }}
 
       - uses: docker/build-push-action@v5
         id: build
@@ -48,7 +48,7 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,scope=${{ matrix.platform }},mode=max
 
@@ -73,29 +73,32 @@ jobs:
     needs: build
     permissions:
       contents: read
-      packages: write
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Get version from pyproject.toml
+      - name: Get version from package.json
         id: version
         run: |
-          VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
           echo "major_minor=$MAJOR_MINOR" >> "$GITHUB_OUTPUT"
           if git rev-parse "refs/tags/v$VERSION" >/dev/null 2>&1; then
             TAG_SHA=$(git rev-list -n 1 "v$VERSION")
             if [ "$TAG_SHA" = "${{ github.sha }}" ]; then
-              echo "is_new_version=true" >> "$GITHUB_OUTPUT"
+              echo "is_version_tag=true" >> "$GITHUB_OUTPUT"
             else
-              echo "is_new_version=false" >> "$GITHUB_OUTPUT"
+              echo "is_version_tag=false" >> "$GITHUB_OUTPUT"
             fi
           else
-            echo "is_new_version=true" >> "$GITHUB_OUTPUT"
+            echo "is_version_tag=false" >> "$GITHUB_OUTPUT"
+          fi
+          # Also detect if this push IS a version tag
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "is_tag_push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_tag_push=false" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/download-artifact@v4
@@ -108,26 +111,27 @@ jobs:
 
       - uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ steps.version.outputs.version }},enable=${{ steps.version.outputs.is_new_version }}
-            type=raw,value=${{ steps.version.outputs.major_minor }},enable=${{ steps.version.outputs.is_new_version }}
+            type=raw,value=${{ steps.version.outputs.version }},enable=${{ steps.version.outputs.is_tag_push }}
+            type=raw,value=${{ steps.version.outputs.major_minor }},enable=${{ steps.version.outputs.is_tag_push }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
             type=sha
 
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+            $(printf '${{ env.IMAGE_NAME }}@sha256:%s ' *)
 
       - name: Inspect image
         run: |
-          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          docker buildx imagetools inspect ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
