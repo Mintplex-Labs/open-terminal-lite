@@ -6,6 +6,10 @@ on:
     paths-ignore:
       - "**/*.md"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   IMAGE_NAME: ghcr.io/mintplex-labs/open-terminal-lite
 
